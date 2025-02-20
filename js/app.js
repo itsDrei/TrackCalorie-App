@@ -1,9 +1,9 @@
 class CalorieTracker {
   constructor() {
-    this._calorieLimit = 2000;
-    this._totalCalories = 0;
-    this._meals = [];
-    this._workouts = [];
+    this._calorieLimit = Storage.getCalorieLimit();
+    this._totalCalories = Storage.getTotalCalories(0);
+    this._meals = Storage.getMeal();
+    this._workouts = Storage.getWorkout();
 
     //display data
     this._showCalorieTotal();
@@ -19,12 +19,16 @@ class CalorieTracker {
   addMeal(meal) {
     this._meals.push(meal);
     this._totalCalories += meal.calories;
+    Storage.updateTotalCalories(this._totalCalories);
+    Storage.saveMeal(meal)
     this._displayMeals(meal);
     this._render();
   }
   addWorkout(workout) {
     this._workouts.push(workout);
     this._totalCalories -= workout.calories;
+    Storage.updateTotalCalories(this._totalCalories);
+    Storage.saveWorkout(workout)
     this._displayWorkout(workout);
     this._render();
   }
@@ -34,6 +38,8 @@ class CalorieTracker {
     if (index !== -1) {
       const meal = this._meals[index];
       this._totalCalories -= meal.calories;
+      Storage.updateTotalCalories(this._totalCalories);
+      Storage.removeMeal(id)
       this._meals.splice(index, 1);
       this._render();
     }
@@ -44,6 +50,8 @@ class CalorieTracker {
     if (index !== -1) {
       const workout = this._workouts[index];
       this._totalCalories += workout.calories;
+       Storage.updateTotalCalories(this._totalCalories);
+       Storage.removeWorkout(id);
       this._workouts.splice(index, 1);
       this._render();
     }
@@ -53,12 +61,19 @@ class CalorieTracker {
     this._totalCalories = 0;
     this._meals = [];
     this._workouts = [];
+    Storage.clearAll();
     this._render();
   }
   setLimit(calorieLimit) {
     this._calorieLimit = calorieLimit;
+    Storage.setCalorieLimit(calorieLimit);
     this._showCalorieLimit();
     this._render();
+  }
+
+  loadItems() {
+    this._meals.forEach(meal => this._displayMeals(meal));
+    this._workouts.forEach(workout => this._displayWorkout(workout));
   }
 
   //private methods
@@ -179,10 +194,104 @@ class Workout {
     this.calories = calories;
   }
 }
+
+class Storage {
+  static getCalorieLimit(defaultLimit = 2000) {
+    let calorieLimit;
+    if (localStorage.getItem("calorieLimit") === null) {
+      calorieLimit = defaultLimit;
+    } else {
+      calorieLimit = +localStorage.getItem("calorieLimit");
+    }
+    return calorieLimit;
+  }
+
+  static setCalorieLimit(calorieLimit) {
+    localStorage.setItem("calorieLimit", calorieLimit);
+  }
+
+  static getTotalCalories(defaultLimit = 0) {
+    let totalCalories;
+    if (localStorage.getItem("totalCalories") === null) {
+      totalCalories = defaultLimit;
+    } else {
+      totalCalories = +localStorage.getItem("totalCalories");
+    }
+    return totalCalories;
+  }
+
+  static updateTotalCalories(calories) {
+    localStorage.setItem("totalCalories", calories);
+  }
+
+  static getMeal() {
+    let meals;
+    if (localStorage.getItem("meals") === null) {
+      meals = [];
+    } else {
+      meals = JSON.parse(localStorage.getItem("meals"));
+    }
+    return meals;
+  }
+
+  static saveMeal(meal) {
+    const meals = Storage.getMeal();
+    meals.push(meal);
+    localStorage.setItem("meals", JSON.stringify(meals));
+  }
+
+  static removeMeal(id) {
+    const meals = Storage.getMeal();
+    meals.forEach((meal, index) => {
+      if (meal.id === id) {
+        meals.splice(index, 1);
+      }
+    });
+
+    localStorage.setItem("meals", JSON.stringify(meals));
+  }
+
+  static getWorkout() {
+    let workout;
+    if (localStorage.getItem("workout") === null) {
+      workout = [];
+    } else {
+      workout = JSON.parse(localStorage.getItem("workout"));
+    }
+    return workout;
+  }
+
+  static saveWorkout(workouts) {
+    const workout = Storage.getWorkout();
+    workout.push(workouts);
+    localStorage.setItem("workout", JSON.stringify(workout));
+  }
+
+  static removeWorkout(id) {
+    const workouts = Storage.getWorkout();
+    workouts.forEach((workout, index) => {
+      if (workout.id === id) {
+        workouts.splice(index, 1);
+      }
+    });
+
+    localStorage.setItem("workout", JSON.stringify(workouts));
+  }
+
+  static clearAll() {
+    localStorage.removeItem('totalCalories');
+    localStorage.removeItem('meals');
+    localStorage.removeItem('workout');
+  }
+}
+
 class App {
   constructor() {
     this._tracker = new CalorieTracker();
+    this._eventLoadListiners();
+  }
 
+  _eventLoadListiners() {
     document
       .getElementById("meal-form")
       .addEventListener("submit", this._newItem.bind(this, "meal"));
@@ -207,8 +316,9 @@ class App {
     document
       .getElementById("limit-form")
       .addEventListener("submit", this._setLimit.bind(this));
+    
+    this._tracker.loadItems();
   }
-
   _newItem(type, e) {
     e.preventDefault();
 
@@ -288,17 +398,16 @@ class App {
     e.preventDefault();
 
     const limit = document.getElementById("limit");
-    
 
-    if (limit.value === '') {
-      alert('Please add a limit');
+    if (limit.value === "") {
+      alert("Please add a limit");
       return;
-    } 
+    }
 
-    this._tracker.setLimit(+limit.value)
-    limit.value = ''
+    this._tracker.setLimit(+limit.value);
+    limit.value = "";
 
-    const modalEl = document.getElementById('limit-modal');
+    const modalEl = document.getElementById("limit-modal");
     const modal = bootstrap.Modal.getInstance(modalEl);
     modal.hide();
   }
